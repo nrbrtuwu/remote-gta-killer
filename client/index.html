@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Remote Killer</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="header">
+        <div>
+          <h1>Remote Killer</h1>
+          <p class="sub">Control dashboard</p>
+        </div>
+      </header>
+
+      <section class="status-bar">
+        <div class="pill" id="serverStatus">Disconnected</div>
+        <div class="pill" id="latency">Latency: -- ms</div>
+        <div class="pill" id="agentCount">Agents: 0</div>
+      </section>
+
+      <section class="auth">
+        <div class="auth-field">
+          <input id="tokenInput" type="password" placeholder="Shared token" />
+          <button id="connectBtn" type="button">Connect</button>
+        </div>
+      </section>
+
+      <section class="controls">
+        <div class="select-row">
+          <label for="agentSelect">Target</label>
+          <select id="agentSelect"></select>
+        </div>
+        <button id="killBtn" class="kill">KILL GTA</button>
+        <button id="killAllBtn" class="kill-all">Kill All</button>
+      </section>
+
+      <section class="agents">
+        <h2>Connected PCs</h2>
+        <div id="agentList" class="agent-list"></div>
+      </section>
+
+      <section class="logs">
+        <h2>Action Logs</h2>
+        <div id="logList" class="log-list"></div>
+      </section>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

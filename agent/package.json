@@ -1,0 +1,14 @@
+{
+  "name": "remote-killer-agent",
+  "version": "1.0.0",
+  "description": "Remote process killer agent",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "socket.io-client": "^4.7.5"
+  }
+}
