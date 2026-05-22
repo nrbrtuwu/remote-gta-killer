@@ -1,6 +1,6 @@
 # Remote Killer (Windows)
 
-Lightweight self-hosted remote process killer with optional Tailscale access control. The server hosts a mobile-friendly dashboard and coordinates multiple Windows agents. The dashboard can kill GTA5_Enhanced.exe on a single PC or all connected PCs at once.
+Lightweight self-hosted remote process killer with optional Tailscale access control. The server hosts a mobile-friendly dashboard and coordinates multiple Windows agents. The dashboard can kill GTA5_Enhanced.exe on a single PC or all connected PCs at once. 
 
 ## Folder layout
 

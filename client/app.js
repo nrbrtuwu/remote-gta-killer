@@ -15,8 +15,7 @@ const state = {
   agents: [],
   selectedHostname: null,
   pingTimer: null,
-  pingMs: null,
-  countdownActive: false
+  pingMs: null
 };
 
 tokenInput.value = state.token;
@@ -98,53 +97,9 @@ function setupPing() {
   }, 2000);
 }
 
-function playBeep() {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.value = 880;
-    gain.gain.value = 0.08;
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
-    setTimeout(() => {
-      osc.stop();
-      ctx.close();
-    }, 120);
-  } catch (error) {
-    // Audio may be blocked until user interaction.
-  }
-}
-
-async function countdown(button) {
-  if (state.countdownActive) {
-    return false;
-  }
-  state.countdownActive = true;
-  button.disabled = true;
-  const original = button.textContent;
-
-  for (let i = 3; i > 0; i -= 1) {
-    button.textContent = `${original} (${i})`;
-    playBeep();
-    await new Promise((resolve) => setTimeout(resolve, 400));
-  }
-
-  button.textContent = original;
-  button.disabled = false;
-  state.countdownActive = false;
-  return true;
-}
-
 async function sendKill(hostname) {
   if (!state.socket || !state.socket.connected) {
     addLog({ message: "Not connected", time: Date.now() });
-    return;
-  }
-  const ready = await countdown(killBtn);
-  if (!ready) {
     return;
   }
   state.socket.emit("kill:one", { hostname, requestId: Date.now() });
@@ -153,10 +108,6 @@ async function sendKill(hostname) {
 async function sendKillAll() {
   if (!state.socket || !state.socket.connected) {
     addLog({ message: "Not connected", time: Date.now() });
-    return;
-  }
-  const ready = await countdown(killAllBtn);
-  if (!ready) {
     return;
   }
   state.socket.emit("kill:all", { requestId: Date.now() });
