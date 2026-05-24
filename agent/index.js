@@ -16,10 +16,6 @@ const CHECK_INTERVAL_MS = parseInt(
   process.env.CHECK_INTERVAL_MS || "5000",
   10
 );
-const LATENCY_PING_INTERVAL_MS = parseInt(
-  process.env.LATENCY_PING_INTERVAL_MS || "2000",
-  10
-);
 
 if (!SHARED_TOKEN) {
   console.error("Missing SHARED_TOKEN in environment.");
@@ -37,7 +33,6 @@ const socket = io(SERVER_URL, {
   reconnectionDelayMax: 2000,
   transports: ["websocket"]
 });
-let pingInFlight = false;
 
 async function isGtaRunning() {
   try {
@@ -56,34 +51,19 @@ async function reportStatus() {
   socket.emit("agent:status", { gtaRunning });
 }
 
-function reportLatency() {
-  if (!socket.connected) {
-    return;
-  }
-  if (pingInFlight) {
-    return;
-  }
-  pingInFlight = true;
-  const started = Date.now();
-  socket.timeout(5000).emit("agent:ping", {}, (error) => {
-    pingInFlight = false;
-    if (error) {
-      return;
-    }
-    const latencyMs = Date.now() - started;
-    socket.emit("agent:latency", { latencyMs });
-  });
-}
-
 socket.on("connect", () => {
   console.log(`Connected to server as ${HOSTNAME}`);
   reportStatus();
-  reportLatency();
 });
 
 socket.on("disconnect", () => {
   console.log("Disconnected from server");
-  pingInFlight = false;
+});
+
+socket.on("server:ping", (payload, ack) => {
+  if (typeof ack === "function") {
+    ack({ agentTime: Date.now() });
+  }
 });
 
 socket.on("kill", async ({ requestId } = {}) => {
@@ -113,4 +93,3 @@ socket.on("kill", async ({ requestId } = {}) => {
 });
 
 setInterval(reportStatus, CHECK_INTERVAL_MS);
-setInterval(reportLatency, LATENCY_PING_INTERVAL_MS);

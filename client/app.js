@@ -8,11 +8,6 @@ const killBtn = document.getElementById("killBtn");
 const killAllBtn = document.getElementById("killAllBtn");
 const agentList = document.getElementById("agentList");
 const logList = document.getElementById("logList");
-const timeoutNotice = document.getElementById("timeoutNotice");
-const timeoutMessage = document.getElementById("timeoutMessage");
-
-const LATENCY_TIMEOUT_MS = 500;
-const lastLatencyByHost = new Map();
 
 const state = {
   socket: null,
@@ -27,7 +22,6 @@ tokenInput.value = state.token;
 
 const tabButtons = document.querySelectorAll(".tab");
 const tabPanels = document.querySelectorAll(".tab-panel");
-let timeoutTimer = null;
 
 function setActiveTab(targetId) {
   tabButtons.forEach((btn) => {
@@ -47,43 +41,11 @@ if (tabButtons.length) {
   setActiveTab(tabButtons[0].dataset.tab);
 }
 
-function showTimeoutNotice(hostname, timeoutMs) {
-  if (!timeoutNotice || !timeoutMessage) {
-    return;
-  }
-  const label = hostname ? `${hostname} agent` : "An agent";
-  timeoutMessage.textContent = `${label} failed to respond in time. (${timeoutMs}ms)`;
-  timeoutNotice.classList.add("show");
-  if (timeoutTimer) {
-    clearTimeout(timeoutTimer);
-  }
-  timeoutTimer = setTimeout(() => {
-    timeoutNotice.classList.remove("show");
-  }, 5000);
-}
-
 function formatLatency(latencyMs) {
   if (!Number.isFinite(latencyMs)) {
     return "-- ms";
   }
   return `${Math.round(latencyMs)} ms`;
-}
-
-function checkLatencyTimeouts(agents) {
-  agents.forEach((agent) => {
-    const currentLatency = Number.isFinite(agent.latencyMs)
-      ? agent.latencyMs
-      : null;
-    const previousLatency = lastLatencyByHost.get(agent.hostname);
-    if (
-      currentLatency !== null &&
-      currentLatency > LATENCY_TIMEOUT_MS &&
-      (previousLatency === undefined || previousLatency <= LATENCY_TIMEOUT_MS)
-    ) {
-      showTimeoutNotice(agent.hostname, LATENCY_TIMEOUT_MS);
-    }
-    lastLatencyByHost.set(agent.hostname, currentLatency);
-  });
 }
 
 function updateStatus(connected) {
@@ -140,7 +102,6 @@ function renderAgents() {
     state.selectedHostname = state.agents[0].hostname;
   }
   agentSelect.value = state.selectedHostname;
-  checkLatencyTimeouts(state.agents);
 }
 
 function addLog(entry) {

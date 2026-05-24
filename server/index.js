@@ -7,6 +7,14 @@ require("dotenv").config();
 
 const PORT = process.env.PORT || 3000;
 const SHARED_TOKEN = process.env.SHARED_TOKEN;
+const AGENT_PING_INTERVAL_MS = Number.parseInt(
+  process.env.AGENT_PING_INTERVAL_MS || "500",
+  10
+);
+const AGENT_PING_TIMEOUT_MS = Number.parseInt(
+  process.env.AGENT_PING_TIMEOUT_MS || "500",
+  10
+);
 
 if (!SHARED_TOKEN) {
   console.error("Missing SHARED_TOKEN in environment.");
@@ -62,6 +70,51 @@ function serializeAgents() {
 
 function emitAgents() {
   io.to("dashboards").emit("agents:update", serializeAgents());
+}
+
+function getAgentPingIntervalMs() {
+  return Number.isFinite(AGENT_PING_INTERVAL_MS) && AGENT_PING_INTERVAL_MS > 0
+    ? AGENT_PING_INTERVAL_MS
+    : 500;
+}
+
+function getAgentPingTimeoutMs() {
+  return Number.isFinite(AGENT_PING_TIMEOUT_MS) && AGENT_PING_TIMEOUT_MS > 0
+    ? AGENT_PING_TIMEOUT_MS
+    : 500;
+}
+
+function pingAgent(hostname, socketId) {
+  const socket = io.sockets.sockets.get(socketId);
+  const agent = agentsById.get(socketId);
+  if (!socket || !agent) {
+    return;
+  }
+  if (agent.pingInFlight) {
+    return;
+  }
+  agent.pingInFlight = true;
+  const started = Date.now();
+  socket.timeout(getAgentPingTimeoutMs()).emit("server:ping", {}, (error) => {
+    agent.pingInFlight = false;
+    if (agentIdByHostname.get(hostname) !== socketId) {
+      return;
+    }
+    if (error) {
+      agent.latencyMs = null;
+      emitAgents();
+      return;
+    }
+    agent.lastSeen = Date.now();
+    agent.latencyMs = Date.now() - started;
+    emitAgents();
+  });
+}
+
+function pingAgents() {
+  for (const [hostname, socketId] of agentIdByHostname.entries()) {
+    pingAgent(hostname, socketId);
+  }
 }
 
 function normalizeIp(rawIp) {
@@ -188,7 +241,8 @@ io.on("connection", (socket) => {
     lastSeen: Date.now(),
     latencyMs: null,
     gtaRunning: null,
-    lastResult: null
+    lastResult: null,
+    pingInFlight: false
   };
 
   agentsById.set(socket.id, agent);
@@ -199,18 +253,6 @@ io.on("connection", (socket) => {
   socket.on("agent:status", ({ gtaRunning }) => {
     agent.lastSeen = Date.now();
     agent.gtaRunning = gtaRunning;
-    emitAgents();
-  });
-
-  socket.on("agent:ping", (payload, ack) => {
-    if (typeof ack === "function") {
-      ack({ serverTime: Date.now() });
-    }
-  });
-
-  socket.on("agent:latency", ({ latencyMs }) => {
-    agent.lastSeen = Date.now();
-    agent.latencyMs = Number.isFinite(latencyMs) ? latencyMs : null;
     emitAgents();
   });
 
@@ -240,8 +282,14 @@ io.on("connection", (socket) => {
     agentIdByHostname.delete(hostname);
     addLog(`Agent disconnected: ${hostname}`);
     emitAgents();
+    const currentHealth = agentHealthByHostname.get(hostname);
+    if (currentHealth) {
+      currentHealth.pingInFlight = false;
+    }
   });
 });
+
+setInterval(pingAgents, getAgentPingIntervalMs());
 
 server.listen(PORT, () => {
   console.log(`Server listening on ${PORT}`);
