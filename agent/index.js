@@ -16,6 +16,10 @@ const CHECK_INTERVAL_MS = parseInt(
   process.env.CHECK_INTERVAL_MS || "5000",
   10
 );
+const LATENCY_PING_INTERVAL_MS = parseInt(
+  process.env.LATENCY_PING_INTERVAL_MS || "2000",
+  10
+);
 
 if (!SHARED_TOKEN) {
   console.error("Missing SHARED_TOKEN in environment.");
@@ -33,6 +37,7 @@ const socket = io(SERVER_URL, {
   reconnectionDelayMax: 2000,
   transports: ["websocket"]
 });
+let pingInFlight = false;
 
 async function isGtaRunning() {
   try {
@@ -51,16 +56,37 @@ async function reportStatus() {
   socket.emit("agent:status", { gtaRunning });
 }
 
+function reportLatency() {
+  if (!socket.connected) {
+    return;
+  }
+  if (pingInFlight) {
+    return;
+  }
+  pingInFlight = true;
+  const started = Date.now();
+  socket.timeout(5000).emit("agent:ping", {}, (error) => {
+    pingInFlight = false;
+    if (error) {
+      return;
+    }
+    const latencyMs = Date.now() - started;
+    socket.emit("agent:latency", { latencyMs });
+  });
+}
+
 socket.on("connect", () => {
   console.log(`Connected to server as ${HOSTNAME}`);
   reportStatus();
+  reportLatency();
 });
 
 socket.on("disconnect", () => {
   console.log("Disconnected from server");
+  pingInFlight = false;
 });
 
-socket.on("kill", async () => {
+socket.on("kill", async ({ requestId } = {}) => {
   const start = Date.now();
   try {
     const { stdout, stderr } = await execAsync(KILL_COMMAND, {
@@ -70,6 +96,7 @@ socket.on("kill", async () => {
     const durationMs = Date.now() - start;
     const message = (stdout || stderr || "Killed").trim();
     socket.emit("agent:killResult", {
+      requestId,
       success: true,
       message,
       durationMs
@@ -77,6 +104,7 @@ socket.on("kill", async () => {
   } catch (error) {
     const durationMs = Date.now() - start;
     socket.emit("agent:killResult", {
+      requestId,
       success: false,
       message: (error.stderr || error.message || "Unknown error").trim(),
       durationMs
@@ -85,3 +113,4 @@ socket.on("kill", async () => {
 });
 
 setInterval(reportStatus, CHECK_INTERVAL_MS);
+setInterval(reportLatency, LATENCY_PING_INTERVAL_MS);

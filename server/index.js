@@ -54,6 +54,7 @@ function serializeAgents() {
     hostname: agent.hostname,
     connectedAt: agent.connectedAt,
     lastSeen: agent.lastSeen,
+    latencyMs: agent.latencyMs ?? null,
     gtaRunning: agent.gtaRunning ?? null,
     lastResult: agent.lastResult ?? null
   }));
@@ -185,6 +186,7 @@ io.on("connection", (socket) => {
     hostname,
     connectedAt: Date.now(),
     lastSeen: Date.now(),
+    latencyMs: null,
     gtaRunning: null,
     lastResult: null
   };
@@ -200,7 +202,19 @@ io.on("connection", (socket) => {
     emitAgents();
   });
 
-  socket.on("agent:killResult", ({ success, message, durationMs }) => {
+  socket.on("agent:ping", (payload, ack) => {
+    if (typeof ack === "function") {
+      ack({ serverTime: Date.now() });
+    }
+  });
+
+  socket.on("agent:latency", ({ latencyMs }) => {
+    agent.lastSeen = Date.now();
+    agent.latencyMs = Number.isFinite(latencyMs) ? latencyMs : null;
+    emitAgents();
+  });
+
+  socket.on("agent:killResult", ({ success, message, durationMs, requestId }) => {
     agent.lastSeen = Date.now();
     agent.lastResult = {
       success,
