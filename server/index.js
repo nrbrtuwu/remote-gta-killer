@@ -282,10 +282,6 @@ io.on("connection", (socket) => {
     agentIdByHostname.delete(hostname);
     addLog(`Agent disconnected: ${hostname}`);
     emitAgents();
-    const currentHealth = agentHealthByHostname.get(hostname);
-    if (currentHealth) {
-      currentHealth.pingInFlight = false;
-    }
   });
 });
 

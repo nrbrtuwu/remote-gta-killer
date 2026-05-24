@@ -37,8 +37,10 @@
                     <label for="agentSelect">Target:</label>
                     <select id="agentSelect"></select>
                 </div>
-                <button id="killBtn" class="kill">KILL GTA</button>
-                <button id="killAllBtn" class="kill-all">Kill All</button>
+                <div class="kill-row">
+                    <button id="killBtn" class="kill">KILL GTA</button>
+                    <button id="killAllBtn" class="kill-all">Kill All</button>
+                </div>
             </section>
 
             <section class="activity">
@@ -73,7 +75,15 @@
                     aria-labelledby="tab-agents"
                 >
                     <h2>Connected PCs</h2>
-                    <div id="agentList" class="agent-list"></div>
+                    <div class="agent-table">
+                        <div class="agent-table-header">
+                            <span>Hostname</span>
+                            <span>Last seen</span>
+                            <span>Latency to server</span>
+                            <span>GTA running</span>
+                        </div>
+                        <div id="agentList" class="agent-list"></div>
+                    </div>
                 </div>
                 <div
                     id="logsTab"

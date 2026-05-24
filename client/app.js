@@ -48,6 +48,25 @@ function formatLatency(latencyMs) {
   return `${Math.round(latencyMs)} ms`;
 }
 
+function getLatencyClass(latencyMs) {
+  if (!Number.isFinite(latencyMs)) {
+    return "muted";
+  }
+  if (latencyMs <= 50) {
+    return "latency-0";
+  }
+  if (latencyMs <= 100) {
+    return "latency-1";
+  }
+  if (latencyMs <= 150) {
+    return "latency-2";
+  }
+  if (latencyMs <= 200) {
+    return "latency-3";
+  }
+  return "latency-4";
+}
+
 function updateStatus(connected) {
   serverStatus.textContent = connected ? "Connected" : "Disconnected";
   serverStatus.classList.toggle("status-connected", connected);
@@ -76,25 +95,19 @@ function renderAgents() {
     const card = document.createElement("div");
     card.className = "agent-card";
 
-    const meta = document.createElement("div");
-    meta.className = "agent-meta";
     const latencyText = formatLatency(agent.latencyMs);
-    meta.innerHTML = `
-      <strong>${agent.hostname}</strong>
-      <span>Last seen: ${new Date(agent.lastSeen).toLocaleTimeString()}</span>
-      <span>Latency to server: ${latencyText}</span>
-      <span>GTA running: ${agent.gtaRunning ? "Yes" : "No"}</span>
+    const latencyClass = getLatencyClass(agent.latencyMs);
+    const latencyCellClass =
+      latencyClass === "muted"
+        ? "agent-cell muted"
+        : `agent-cell ${latencyClass}`;
+    const gtaClass = agent.gtaRunning ? "gta-yes" : "gta-no";
+    card.innerHTML = `
+      <div class="agent-cell" data-label="Hostname">${agent.hostname}</div>
+      <div class="agent-cell muted" data-label="Last seen">${new Date(agent.lastSeen).toLocaleTimeString()}</div>
+      <div class="${latencyCellClass}" data-label="Latency to server">${latencyText}</div>
+      <div class="agent-cell ${gtaClass}" data-label="GTA running">${agent.gtaRunning ? "Yes" : "No"}</div>
     `;
-
-    const action = document.createElement("div");
-    action.className = "agent-action";
-    const btn = document.createElement("button");
-    btn.textContent = "Kill";
-    btn.addEventListener("click", () => sendKill(agent.hostname));
-    action.appendChild(btn);
-
-    card.appendChild(meta);
-    card.appendChild(action);
     agentList.appendChild(card);
   });
 

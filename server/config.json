@@ -1,4 +1,4 @@
 {
-  "tailscaleEnabled": true,
+  "tailscaleEnabled": false,
   "allowedTailscaleIps": ["100.64.1.65", "100.64.1.66"]
 }
