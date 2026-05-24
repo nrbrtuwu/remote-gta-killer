@@ -71,7 +71,7 @@ npm start
 - Kill GTA on one PC or all PCs
 - Shared token auth for server, agents, and dashboard
 - Live action logs
-- Latency display
+- Server latency display
 - Dark mode with toggle
 - Mobile-friendly layout
 - Auto-detect GTA running on each agent

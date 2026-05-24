@@ -20,9 +20,31 @@ const state = {
 
 tokenInput.value = state.token;
 
+const tabButtons = document.querySelectorAll(".tab");
+const tabPanels = document.querySelectorAll(".tab-panel");
+
+function setActiveTab(targetId) {
+  tabButtons.forEach((btn) => {
+    const isActive = btn.dataset.tab === targetId;
+    btn.classList.toggle("active", isActive);
+    btn.setAttribute("aria-selected", isActive ? "true" : "false");
+  });
+  tabPanels.forEach((panel) => {
+    panel.classList.toggle("active", panel.id === targetId);
+  });
+}
+
+if (tabButtons.length) {
+  tabButtons.forEach((btn) => {
+    btn.addEventListener("click", () => setActiveTab(btn.dataset.tab));
+  });
+  setActiveTab(tabButtons[0].dataset.tab);
+}
+
 function updateStatus(connected) {
   serverStatus.textContent = connected ? "Connected" : "Disconnected";
-  serverStatus.style.color = connected ? "var(--success)" : "var(--danger)";
+  serverStatus.classList.toggle("status-connected", connected);
+  serverStatus.classList.toggle("status-disconnected", !connected);
 }
 
 function renderAgents() {
@@ -92,7 +114,7 @@ function setupPing() {
     const started = Date.now();
     state.socket.emit("ping:server", {}, () => {
       state.pingMs = Date.now() - started;
-      latencyLabel.textContent = `Latency: ${state.pingMs} ms`;
+      latencyLabel.textContent = `Server latency: ${state.pingMs} ms`;
     });
   }, 2000);
 }
