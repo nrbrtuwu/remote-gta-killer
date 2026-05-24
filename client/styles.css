@@ -23,6 +23,36 @@ body {
     overflow: hidden;
 }
 
+body:not(.connected) .app {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+body:not(.connected) .header,
+body:not(.connected) .status-bar,
+body:not(.connected) .controls,
+body:not(.connected) .activity {
+    display: none;
+}
+
+body:not(.connected) .auth {
+    display: block;
+    width: 100%;
+    max-width: 360px;
+    margin: 0;
+}
+
+body:not(.connected) .auth-field {
+    margin-bottom: 0;
+}
+
+body.connected .auth {
+    display: none;
+}
+
 .header {
     display: flex;
     align-items: center;
@@ -34,6 +64,15 @@ body {
 .header h1 {
     margin: 0;
     font-size: 22px;
+}
+
+.big-view-btn {
+    border: 1px solid #333333;
+    background: #111111;
+    color: #ffffff;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
 }
 
 .sub {
@@ -117,6 +156,18 @@ body {
     gap: 8px;
 }
 
+.exit-big-view {
+    display: none;
+    margin-left: auto;
+    border: 1px solid #333333;
+    background: #111111;
+    color: #ffffff;
+    width: 36px;
+    height: 36px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
 .select-row select {
     flex: 1;
     padding: 8px 10px;
@@ -150,6 +201,58 @@ body {
 
 .kill-all {
     background: #222222;
+}
+
+body.big-view .app {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+}
+
+body.big-view .header,
+body.big-view .status-bar,
+body.big-view .auth,
+body.big-view .activity {
+    display: none;
+}
+
+body.big-view .controls {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 0;
+}
+
+body.big-view .select-row label {
+    font-size: 14px;
+}
+
+body.big-view .select-row select {
+    font-size: 16px;
+    padding: 10px 12px;
+}
+
+body.big-view .exit-big-view {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+body.big-view .kill-row {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+body.big-view .kill,
+body.big-view .kill-all {
+    flex: 1;
+    min-height: 120px;
+    font-size: clamp(28px, 6vw, 44px);
+    padding: 18px;
 }
 
 .activity {
@@ -300,23 +403,49 @@ body {
 
 @media (max-width: 600px) {
     body {
-        overflow: auto;
+        overflow: hidden;
     }
 
     .app {
-        height: auto;
-        min-height: 100vh;
+        height: 100vh;
         padding: 12px;
-        overflow: visible;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
     }
 
     .header {
-        flex-direction: column;
-        align-items: flex-start;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .header > div {
+        min-width: 0;
+        flex: 1 1 auto;
+    }
+
+    .header h1 {
+        font-size: 20px;
+        word-break: break-word;
+    }
+
+    .big-view-btn {
+        margin-left: auto;
+        flex-shrink: 0;
     }
 
     .status-bar {
         grid-template-columns: 1fr 1fr;
+    }
+
+    .status-bar .pill {
+        height: 38px;
+        line-height: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        white-space: nowrap;
     }
 
     #serverStatus {
@@ -337,6 +466,20 @@ body {
         text-align: center;
     }
 
+    .activity {
+        flex: 0 0 auto;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .tab-panel {
+        flex: 0 0 auto;
+    }
+
+    .tab-panel.active {
+        display: block;
+    }
+
     .agent-table {
         overflow-x: visible;
     }
@@ -347,6 +490,12 @@ body {
 
     .agent-list {
         gap: 10px;
+    }
+
+    .agent-list,
+    .log-list {
+        overflow-y: auto;
+        max-height: 40vh;
     }
 
     .agent-card {
@@ -375,8 +524,4 @@ body {
         margin-right: 12px;
     }
 
-    .agent-list,
-    .log-list {
-        max-height: none;
-    }
 }

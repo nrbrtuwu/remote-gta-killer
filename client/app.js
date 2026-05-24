@@ -8,6 +8,8 @@ const killBtn = document.getElementById("killBtn");
 const killAllBtn = document.getElementById("killAllBtn");
 const agentList = document.getElementById("agentList");
 const logList = document.getElementById("logList");
+const bigViewBtn = document.getElementById("bigViewBtn");
+const exitBigViewBtn = document.getElementById("exitBigViewBtn");
 
 const state = {
   socket: null,
@@ -15,13 +17,81 @@ const state = {
   agents: [],
   selectedHostname: null,
   pingTimer: null,
-  pingMs: null
+  pingMs: null,
+  connected: false
 };
 
 tokenInput.value = state.token;
 
 const tabButtons = document.querySelectorAll(".tab");
 const tabPanels = document.querySelectorAll(".tab-panel");
+const mobileQuery = window.matchMedia("(max-width: 600px)");
+let wakeLock = null;
+
+async function requestWakeLock() {
+  if (!state.connected || !mobileQuery.matches) {
+    return;
+  }
+  if (!("wakeLock" in navigator)) {
+    return;
+  }
+  try {
+    wakeLock = await navigator.wakeLock.request("screen");
+    wakeLock.addEventListener("release", () => {
+      wakeLock = null;
+    });
+  } catch (err) {
+    console.error(`Wake lock failed: ${err.name}, ${err.message}`);
+  }
+}
+
+function releaseWakeLock() {
+  if (wakeLock) {
+    wakeLock.release();
+    wakeLock = null;
+  }
+}
+
+function setBigView(enabled) {
+  document.body.classList.toggle("big-view", enabled);
+}
+
+function setConnectedState(connected) {
+  state.connected = connected;
+  document.body.classList.toggle("connected", connected);
+  if (!connected) {
+    setBigView(false);
+    releaseWakeLock();
+  } else {
+    requestWakeLock();
+  }
+}
+
+if (bigViewBtn) {
+  bigViewBtn.addEventListener("click", () => setBigView(true));
+}
+
+if (exitBigViewBtn) {
+  exitBigViewBtn.addEventListener("click", () => setBigView(false));
+}
+
+setConnectedState(false);
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    requestWakeLock();
+  } else {
+    releaseWakeLock();
+  }
+});
+
+mobileQuery.addEventListener("change", () => {
+  if (mobileQuery.matches) {
+    requestWakeLock();
+  } else {
+    releaseWakeLock();
+  }
+});
 
 function setActiveTab(targetId) {
   tabButtons.forEach((btn) => {
@@ -181,10 +251,12 @@ connectBtn.addEventListener("click", () => {
   state.socket.on("connect", () => {
     updateStatus(true);
     setupPing();
+    setConnectedState(true);
   });
 
   state.socket.on("disconnect", () => {
     updateStatus(false);
+    setConnectedState(false);
   });
 
   state.socket.on("init", ({ agents, logs }) => {
