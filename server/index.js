@@ -56,6 +56,7 @@ function addLog(message) {
     message,
     time: Date.now()
   };
+  console.log(`[server] ${message}`);
   logs.push(entry);
   if (logs.length > 200) {
     logs.shift();
@@ -116,6 +117,7 @@ function markAgentPingLost(hostname, agent) {
   if (!agent.pingUnresponsive) {
     agent.pingUnresponsive = true;
     agent.pingLossStartedAt = Date.now();
+    addLog(`Agent timeout detected: ${hostname}`);
   }
 
   if (!agent.pingLossTimer) {
@@ -158,7 +160,7 @@ function markAgentDisconnected(hostname, agent, message) {
   agent.latencyMs = null;
   agent.offlineSince = Date.now();
   clearPingOffline(agent);
-  addLog(message || `Agent disconnected: ${hostname}`);
+  addLog(message || `Agent disconnected gracefully: ${hostname}`);
   emitAgents();
   scheduleAgentCleanup(hostname, agent);
 }
@@ -379,7 +381,7 @@ io.on("connection", (socket) => {
 
   agentsById.set(socket.id, agent);
   agentsByHostname.set(hostname, agent);
-  addLog(existingAgent ? `Agent reconnected: ${hostname}` : `Agent connected: ${hostname}`);
+  addLog(existingAgent ? `Agent reconnected successfully: ${hostname}` : `Agent connected successfully: ${hostname}`);
   emitAgents();
   socket.emit("server:settings", getAgentSettings());
 
@@ -418,7 +420,8 @@ io.on("connection", (socket) => {
 
   socket.on("agent:shutdown", ({ reason } = {}, ack) => {
     agent.gracefulShutdownRequested = true;
-    markAgentDisconnected(hostname, agent, `Agent disconnected: ${hostname}`);
+    addLog(`Agent requested graceful shutdown: ${hostname} (${reason || "shutdown"})`);
+    markAgentDisconnected(hostname, agent, `Agent disconnected gracefully: ${hostname}`);
     if (typeof ack === "function") {
       ack({ ok: true, reason: reason || "shutdown" });
     }
@@ -432,7 +435,7 @@ io.on("connection", (socket) => {
     if (agent.gracefulShutdownRequested) {
       return;
     }
-    addLog(`Agent connection lost: ${hostname}`);
+    addLog(`Agent connection lost unexpectedly: ${hostname}`);
     markAgentPingLost(hostname, agent);
     emitAgents();
   });
@@ -442,4 +445,5 @@ setInterval(pingAgents, getAgentPingIntervalMs());
 
 server.listen(PORT, () => {
   console.log(`Server listening on ${PORT}`);
+  addLog(`Server started on port ${PORT}`);
 });
