@@ -7,14 +7,21 @@ require("dotenv").config();
 
 const PORT = process.env.PORT || 3000;
 const SHARED_TOKEN = process.env.SHARED_TOKEN;
-const AGENT_PING_INTERVAL_MS = Number.parseInt(
-  process.env.AGENT_PING_INTERVAL_MS || "500",
-  10
-);
-const AGENT_PING_TIMEOUT_MS = Number.parseInt(
-  process.env.AGENT_PING_TIMEOUT_MS || "500",
-  10
-);
+function readPositiveIntEnv(name, fallback) {
+  const value = Number.parseInt(process.env[name] || "", 10);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+const SERVER_TIMINGS = {
+  pingHeartbeatIntervalMs: readPositiveIntEnv("PING_HEARTBEAT_INTERVAL_MS", 500),
+  timeoutToOfflineIntervalMs: readPositiveIntEnv("TIMEOUT_TO_OFFLINE_INTERVAL_MS", 300000),
+  offlineDeviceDeleteIntervalMs: readPositiveIntEnv("OFFLINE_DEVICE_DELETE_INTERVAL_MS", 900000),
+  socketIoPingIntervalMs: readPositiveIntEnv("SOCKETIO_PING_INTERVAL_MS", 25000),
+  socketIoPingTimeoutMs: readPositiveIntEnv("SOCKETIO_PING_TIMEOUT_MS", 300000),
+  agentStatusReportIntervalMs: readPositiveIntEnv("AGENT_STATUS_REPORT_INTERVAL_MS", 5000),
+  killCommandTimeoutMs: readPositiveIntEnv("KILL_COMMAND_TIMEOUT_MS", 10000),
+  shutdownAckTimeoutMs: readPositiveIntEnv("SHUTDOWN_ACK_TIMEOUT_MS", 500)
+};
 
 if (!SHARED_TOKEN) {
   console.error("Missing SHARED_TOKEN in environment.");
@@ -30,6 +37,8 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   transports: ["websocket"],
+  pingInterval: SERVER_TIMINGS.socketIoPingIntervalMs,
+  pingTimeout: SERVER_TIMINGS.socketIoPingTimeoutMs,
   cors: {
     origin: false
   }
@@ -41,7 +50,7 @@ app.get("/health", (req, res) => {
 });
 
 const agentsById = new Map();
-const agentIdByHostname = new Map();
+const agentsByHostname = new Map();
 const logs = [];
 
 function addLog(message) {
@@ -57,14 +66,16 @@ function addLog(message) {
 }
 
 function serializeAgents() {
-  return Array.from(agentsById.values()).map((agent) => ({
-    id: agent.id,
+  return Array.from(agentsByHostname.values()).map((agent) => ({
+    id: agent.socketId || agent.hostname,
     hostname: agent.hostname,
     connectedAt: agent.connectedAt,
     lastSeen: agent.lastSeen,
     latencyMs: agent.latencyMs ?? null,
     gtaRunning: agent.gtaRunning ?? null,
-    lastResult: agent.lastResult ?? null
+    lastResult: agent.lastResult ?? null,
+    connected: agent.connected,
+    pingUnresponsive: agent.pingUnresponsive
   }));
 }
 
@@ -72,22 +83,97 @@ function emitAgents() {
   io.to("dashboards").emit("agents:update", serializeAgents());
 }
 
+function getAgentSettings() {
+  return {
+    pingHeartbeatIntervalMs: SERVER_TIMINGS.pingHeartbeatIntervalMs,
+    timeoutToOfflineIntervalMs: SERVER_TIMINGS.timeoutToOfflineIntervalMs,
+    offlineDeviceDeleteIntervalMs: SERVER_TIMINGS.offlineDeviceDeleteIntervalMs,
+    socketIoPingIntervalMs: SERVER_TIMINGS.socketIoPingIntervalMs,
+    socketIoPingTimeoutMs: SERVER_TIMINGS.socketIoPingTimeoutMs,
+    agentStatusReportIntervalMs: SERVER_TIMINGS.agentStatusReportIntervalMs,
+    killCommandTimeoutMs: SERVER_TIMINGS.killCommandTimeoutMs,
+    shutdownAckTimeoutMs: SERVER_TIMINGS.shutdownAckTimeoutMs
+  };
+}
+
 function getAgentPingIntervalMs() {
-  return Number.isFinite(AGENT_PING_INTERVAL_MS) && AGENT_PING_INTERVAL_MS > 0
-    ? AGENT_PING_INTERVAL_MS
-    : 500;
+  return SERVER_TIMINGS.pingHeartbeatIntervalMs;
 }
 
 function getAgentPingTimeoutMs() {
-  return Number.isFinite(AGENT_PING_TIMEOUT_MS) && AGENT_PING_TIMEOUT_MS > 0
-    ? AGENT_PING_TIMEOUT_MS
-    : 500;
+  return SERVER_TIMINGS.socketIoPingTimeoutMs;
+}
+
+function getAgentPingOfflineGraceMs() {
+  return SERVER_TIMINGS.timeoutToOfflineIntervalMs;
+}
+
+function getAgentOfflineGraceMs() {
+  return SERVER_TIMINGS.offlineDeviceDeleteIntervalMs;
+}
+
+function clearPingLossTimer(agent) {
+  if (agent.pingLossTimer) {
+    clearTimeout(agent.pingLossTimer);
+    agent.pingLossTimer = null;
+  }
+}
+
+function markAgentPingLost(hostname, agent) {
+  if (!agent.pingUnresponsive) {
+    agent.pingUnresponsive = true;
+    agent.pingLossStartedAt = Date.now();
+  }
+
+  if (!agent.pingLossTimer) {
+    agent.pingLossTimer = setTimeout(() => {
+      const currentAgent = agentsByHostname.get(hostname);
+      if (!currentAgent || currentAgent.pingLossStartedAt !== agent.pingLossStartedAt) {
+        return;
+      }
+
+      currentAgent.connected = false;
+      currentAgent.socketId = null;
+      currentAgent.latencyMs = null;
+      currentAgent.offlineSince = Date.now();
+      clearPingLossTimer(currentAgent);
+      addLog(`Agent marked offline after ping loss: ${hostname}`);
+      emitAgents();
+      scheduleAgentCleanup(hostname, currentAgent);
+    }, getAgentPingOfflineGraceMs());
+  }
+}
+
+function schedulePingOffline(hostname, agent) {
+  markAgentPingLost(hostname, agent);
+}
+
+function clearPingOffline(agent) {
+  agent.pingUnresponsive = false;
+  agent.pingLossStartedAt = null;
+  clearPingLossTimer(agent);
+}
+
+function markAgentDisconnected(hostname, agent, message) {
+  if (agent.cleanupTimer) {
+    clearTimeout(agent.cleanupTimer);
+    agent.cleanupTimer = null;
+  }
+
+  agent.connected = false;
+  agent.socketId = null;
+  agent.latencyMs = null;
+  agent.offlineSince = Date.now();
+  clearPingOffline(agent);
+  addLog(message || `Agent disconnected: ${hostname}`);
+  emitAgents();
+  scheduleAgentCleanup(hostname, agent);
 }
 
 function pingAgent(hostname, socketId) {
   const socket = io.sockets.sockets.get(socketId);
   const agent = agentsById.get(socketId);
-  if (!socket || !agent) {
+  if (!socket || !agent || !agent.connected) {
     return;
   }
   if (agent.pingInFlight) {
@@ -97,24 +183,47 @@ function pingAgent(hostname, socketId) {
   const started = Date.now();
   socket.timeout(getAgentPingTimeoutMs()).emit("server:ping", {}, (error) => {
     agent.pingInFlight = false;
-    if (agentIdByHostname.get(hostname) !== socketId) {
+    if (agentsByHostname.get(hostname)?.socketId !== socketId) {
       return;
     }
     if (error) {
       agent.latencyMs = null;
+      agent.pingLossStartedAt = agent.pingLossStartedAt || Date.now();
+      schedulePingOffline(hostname, agent);
       emitAgents();
       return;
     }
     agent.lastSeen = Date.now();
     agent.latencyMs = Date.now() - started;
+    clearPingOffline(agent);
     emitAgents();
   });
 }
 
 function pingAgents() {
-  for (const [hostname, socketId] of agentIdByHostname.entries()) {
-    pingAgent(hostname, socketId);
+  for (const [hostname, agent] of agentsByHostname.entries()) {
+    if (!agent.connected || !agent.socketId) {
+      continue;
+    }
+    pingAgent(hostname, agent.socketId);
   }
+}
+
+function scheduleAgentCleanup(hostname, agent) {
+  if (agent.cleanupTimer) {
+    clearTimeout(agent.cleanupTimer);
+  }
+
+  agent.cleanupTimer = setTimeout(() => {
+    const currentAgent = agentsByHostname.get(hostname);
+    if (!currentAgent || currentAgent.connected || currentAgent.offlineSince !== agent.offlineSince) {
+      return;
+    }
+
+    agentsByHostname.delete(hostname);
+    addLog(`Agent removed after offline grace period: ${hostname}`);
+    emitAgents();
+  }, getAgentOfflineGraceMs());
 }
 
 function normalizeIp(rawIp) {
@@ -200,9 +309,10 @@ io.on("connection", (socket) => {
         socket.emit("kill:error", { message: "IP not allowed for kill" });
         return;
       }
-      const targetId = agentIdByHostname.get(hostname);
+      const targetAgent = agentsByHostname.get(hostname);
+      const targetId = targetAgent?.connected ? targetAgent.socketId : null;
       if (!targetId) {
-        socket.emit("kill:error", { message: `Agent not found: ${hostname}` });
+        socket.emit("kill:error", { message: `Agent not connected: ${hostname}` });
         return;
       }
       addLog(`Kill request for ${hostname}`);
@@ -215,8 +325,11 @@ io.on("connection", (socket) => {
         return;
       }
       addLog("Kill request for ALL agents");
-      for (const [hostname, targetId] of agentIdByHostname.entries()) {
-        io.to(targetId).emit("kill", { requestId, hostname });
+      for (const [hostname, targetAgent] of agentsByHostname.entries()) {
+        if (!targetAgent.connected || !targetAgent.socketId) {
+          continue;
+        }
+        io.to(targetAgent.socketId).emit("kill", { requestId, hostname });
       }
     });
 
@@ -234,29 +347,62 @@ io.on("connection", (socket) => {
     return;
   }
 
-  const agent = {
-    id: socket.id,
+  const existingAgent = agentsByHostname.get(hostname);
+  if (existingAgent && existingAgent.cleanupTimer) {
+    clearTimeout(existingAgent.cleanupTimer);
+    existingAgent.cleanupTimer = null;
+  }
+
+  const agent = existingAgent || {
     hostname,
     connectedAt: Date.now(),
     lastSeen: Date.now(),
     latencyMs: null,
     gtaRunning: null,
     lastResult: null,
-    pingInFlight: false
+    pingInFlight: false,
+    connected: false,
+    socketId: null,
+    offlineSince: null,
+    cleanupTimer: null,
+    pingUnresponsive: false,
+    pingLossStartedAt: null,
+    pingLossTimer: null
   };
 
+  if (agent.socketId && agent.socketId !== socket.id) {
+    agentsById.delete(agent.socketId);
+  }
+
+  agent.id = socket.id;
+  agent.socketId = socket.id;
+  agent.connected = true;
+  agent.connectedAt = agent.connectedAt || Date.now();
+  agent.lastSeen = Date.now();
+  agent.offlineSince = null;
+  agent.pingInFlight = false;
+  agent.gracefulShutdownRequested = false;
+  clearPingOffline(agent);
+
   agentsById.set(socket.id, agent);
-  agentIdByHostname.set(hostname, socket.id);
-  addLog(`Agent connected: ${hostname}`);
+  agentsByHostname.set(hostname, agent);
+  addLog(existingAgent ? `Agent reconnected: ${hostname}` : `Agent connected: ${hostname}`);
   emitAgents();
+  socket.emit("server:settings", getAgentSettings());
 
   socket.on("agent:status", ({ gtaRunning }) => {
+    if (!agent.connected) {
+      return;
+    }
     agent.lastSeen = Date.now();
     agent.gtaRunning = gtaRunning;
     emitAgents();
   });
 
   socket.on("agent:killResult", ({ success, message, durationMs, requestId }) => {
+    if (!agent.connected) {
+      return;
+    }
     agent.lastSeen = Date.now();
     agent.lastResult = {
       success,
@@ -277,10 +423,24 @@ io.on("connection", (socket) => {
     emitAgents();
   });
 
+  socket.on("agent:shutdown", ({ reason } = {}, ack) => {
+    agent.gracefulShutdownRequested = true;
+    markAgentDisconnected(hostname, agent, `Agent disconnected: ${hostname}`);
+    if (typeof ack === "function") {
+      ack({ ok: true, reason: reason || "shutdown" });
+    }
+  });
+
   socket.on("disconnect", () => {
     agentsById.delete(socket.id);
-    agentIdByHostname.delete(hostname);
-    addLog(`Agent disconnected: ${hostname}`);
+    if (agent.socketId !== socket.id) {
+      return;
+    }
+    if (agent.gracefulShutdownRequested) {
+      return;
+    }
+    addLog(`Agent connection lost: ${hostname}`);
+    markAgentPingLost(hostname, agent);
     emitAgents();
   });
 });

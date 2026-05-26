@@ -342,6 +342,15 @@ body.big-view .kill-all {
     min-width: 520px;
 }
 
+.agent-card.timeout-alert {
+    border-color: #ff3b3b;
+    box-shadow:
+        0 0 0 1px rgba(255, 59, 59, 0.75),
+        0 0 18px rgba(255, 59, 59, 0.28),
+        inset 0 0 22px rgba(255, 59, 59, 0.12);
+    animation: timeoutCardPulse 0.9s ease-in-out infinite;
+}
+
 .agent-cell {
     color: #ffffff;
     font-size: 24px;
@@ -380,6 +389,18 @@ body.big-view .kill-all {
     font-weight: 600;
 }
 
+.agent-cell.timeout-pulse {
+    color: #ff1f1f;
+    font-weight: 900;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    animation: timeoutPulse 0.7s ease-in-out infinite;
+    text-shadow:
+        0 0 6px rgba(255, 31, 31, 0.7),
+        0 0 18px rgba(255, 31, 31, 0.5);
+    filter: drop-shadow(0 0 8px rgba(255, 31, 31, 0.5));
+}
+
 .agent-cell.gta-yes {
     color: #2ecc71;
     font-weight: 600;
@@ -399,6 +420,38 @@ body.big-view .kill-all {
 
 .log-entry strong {
     color: #ffffff;
+}
+
+@keyframes timeoutPulse {
+    0%,
+    100% {
+        opacity: 0.55;
+        transform: scale(1);
+        text-shadow:
+            0 0 6px rgba(255, 31, 31, 0.45),
+            0 0 14px rgba(255, 31, 31, 0.28);
+    }
+
+    50% {
+        opacity: 1;
+        transform: scale(1.08);
+        text-shadow:
+            0 0 12px rgba(255, 31, 31, 0.95),
+            0 0 28px rgba(255, 31, 31, 0.75);
+    }
+}
+
+@keyframes timeoutCardPulse {
+    0%,
+    100% {
+        background: #000000;
+        transform: translateZ(0);
+    }
+
+    50% {
+        background: linear-gradient(90deg, rgba(50, 0, 0, 0.9), #000000 55%, rgba(50, 0, 0, 0.9));
+        transform: translateZ(0) scale(1.01);
+    }
 }
 
 @media (max-width: 600px) {

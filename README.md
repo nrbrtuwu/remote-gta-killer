@@ -26,6 +26,12 @@ copy .env.example .env
 
 Edit server/.env and set a strong SHARED_TOKEN.
 
+Server timing values are configured in server/.env and are pushed to agents automatically on connect:
+
+- PING_HEARTBEAT_INTERVAL_MS=how often the server pings agents
+- TIMEOUT_TO_OFFLINE_INTERVAL_MS=how long a timeout stays in Timeout before Offline
+- OFFLINE_DEVICE_DELETE_INTERVAL_MS=how long an offline device stays listed before deletion
+
 Edit server/config.json to control access rules:
 
 - tailscaleEnabled: false means only local network dashboard IPs can connect and send kill commands.
@@ -52,6 +58,8 @@ Edit agent/.env:
 - SERVER_URL=http://<server-ip>:3000
 - SHARED_TOKEN=the same value as the server
 - HOSTNAME=optional override (defaults to Windows hostname)
+
+Agent timing values are not configured locally; the server sends them on connect.
 
 Start the agent:
 

@@ -12,10 +12,16 @@ const HOSTNAME = process.env.HOSTNAME || os.hostname();
 const KILL_COMMAND = process.env.KILL_COMMAND || "taskkill /im GTA5_Enhanced.exe /f";
 const CHECK_COMMAND =
   process.env.CHECK_COMMAND || 'tasklist /fi "imagename eq GTA5_Enhanced.exe"';
-const CHECK_INTERVAL_MS = parseInt(
-  process.env.CHECK_INTERVAL_MS || "5000",
-  10
-);
+const DEFAULT_SETTINGS = {
+  pingHeartbeatIntervalMs: 500,
+  timeoutToOfflineIntervalMs: 300000,
+  offlineDeviceDeleteIntervalMs: 900000,
+  socketIoPingIntervalMs: 25000,
+  socketIoPingTimeoutMs: 300000,
+  agentStatusReportIntervalMs: 5000,
+  killCommandTimeoutMs: 10000,
+  shutdownAckTimeoutMs: 500
+};
 
 if (!SHARED_TOKEN) {
   console.error("Missing SHARED_TOKEN in environment.");
@@ -29,10 +35,59 @@ const socket = io(SERVER_URL, {
     hostname: HOSTNAME
   },
   reconnection: true,
-  reconnectionDelay: 500,
-  reconnectionDelayMax: 2000,
   transports: ["websocket"]
 });
+
+let shuttingDown = false;
+let serverSettings = { ...DEFAULT_SETTINGS };
+let statusTimer = null;
+
+function readPositiveInt(value, fallback) {
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function setupStatusReporting() {
+  if (statusTimer) {
+    clearInterval(statusTimer);
+  }
+
+  statusTimer = setInterval(reportStatus, readPositiveInt(serverSettings.agentStatusReportIntervalMs, DEFAULT_SETTINGS.agentStatusReportIntervalMs));
+}
+
+function applyServerSettings(nextSettings = {}) {
+  serverSettings = {
+    pingHeartbeatIntervalMs: readPositiveInt(nextSettings.pingHeartbeatIntervalMs, DEFAULT_SETTINGS.pingHeartbeatIntervalMs),
+    timeoutToOfflineIntervalMs: readPositiveInt(nextSettings.timeoutToOfflineIntervalMs, DEFAULT_SETTINGS.timeoutToOfflineIntervalMs),
+    offlineDeviceDeleteIntervalMs: readPositiveInt(nextSettings.offlineDeviceDeleteIntervalMs, DEFAULT_SETTINGS.offlineDeviceDeleteIntervalMs),
+    socketIoPingIntervalMs: readPositiveInt(nextSettings.socketIoPingIntervalMs, DEFAULT_SETTINGS.socketIoPingIntervalMs),
+    socketIoPingTimeoutMs: readPositiveInt(nextSettings.socketIoPingTimeoutMs, DEFAULT_SETTINGS.socketIoPingTimeoutMs),
+    agentStatusReportIntervalMs: readPositiveInt(nextSettings.agentStatusReportIntervalMs, DEFAULT_SETTINGS.agentStatusReportIntervalMs),
+    killCommandTimeoutMs: readPositiveInt(nextSettings.killCommandTimeoutMs, DEFAULT_SETTINGS.killCommandTimeoutMs),
+    shutdownAckTimeoutMs: readPositiveInt(nextSettings.shutdownAckTimeoutMs, DEFAULT_SETTINGS.shutdownAckTimeoutMs)
+  };
+
+  setupStatusReporting();
+}
+
+function gracefulShutdown(reason = "shutdown") {
+  if (shuttingDown) {
+    return;
+  }
+  shuttingDown = true;
+
+  const finish = () => {
+    socket.disconnect();
+    process.exit(0);
+  };
+
+  if (!socket.connected) {
+    finish();
+    return;
+  }
+
+  socket.emit("agent:shutdown", { reason });
+  setTimeout(finish, readPositiveInt(serverSettings.shutdownAckTimeoutMs, DEFAULT_SETTINGS.shutdownAckTimeoutMs));
+}
 
 async function isGtaRunning() {
   try {
@@ -56,8 +111,20 @@ socket.on("connect", () => {
   reportStatus();
 });
 
+socket.on("server:settings", (settings) => {
+  applyServerSettings(settings);
+});
+
 socket.on("disconnect", () => {
   console.log("Disconnected from server");
+});
+
+process.on("SIGINT", () => gracefulShutdown("sigint"));
+process.on("SIGTERM", () => gracefulShutdown("sigterm"));
+process.on("beforeExit", () => {
+  if (!shuttingDown) {
+    gracefulShutdown("beforeExit");
+  }
 });
 
 socket.on("server:ping", (payload, ack) => {
@@ -71,7 +138,7 @@ socket.on("kill", async ({ requestId } = {}) => {
   try {
     const { stdout, stderr } = await execAsync(KILL_COMMAND, {
       windowsHide: true,
-      timeout: 10000
+      timeout: readPositiveInt(serverSettings.killCommandTimeoutMs, DEFAULT_SETTINGS.killCommandTimeoutMs)
     });
     const durationMs = Date.now() - start;
     const message = (stdout || stderr || "Killed").trim();
@@ -92,4 +159,4 @@ socket.on("kill", async ({ requestId } = {}) => {
   }
 });
 
-setInterval(reportStatus, CHECK_INTERVAL_MS);
+applyServerSettings();

@@ -137,6 +137,36 @@ function getLatencyClass(latencyMs) {
   return "latency-4";
 }
 
+function formatAgentLatency(agent) {
+  if (!agent.connected) {
+    return "Offline";
+  }
+  if (agent.pingUnresponsive) {
+    return "Timeout";
+  }
+  return formatLatency(agent.latencyMs);
+}
+
+function getAgentLatencyClass(agent) {
+  if (!agent.connected || agent.pingUnresponsive || !Number.isFinite(agent.latencyMs)) {
+    return "muted";
+  }
+  return getLatencyClass(agent.latencyMs);
+}
+
+function formatGtaRunning(agent) {
+  if (!agent.connected) {
+    return "--";
+  }
+  if (agent.pingUnresponsive) {
+    return "-";
+  }
+  if (agent.gtaRunning === null || agent.gtaRunning === undefined) {
+    return "Unknown";
+  }
+  return agent.gtaRunning ? "Yes" : "No";
+}
+
 function updateStatus(connected) {
   serverStatus.textContent = connected ? "Connected" : "Disconnected";
   serverStatus.classList.toggle("status-connected", connected);
@@ -159,24 +189,30 @@ function renderAgents() {
   state.agents.forEach((agent) => {
     const option = document.createElement("option");
     option.value = agent.hostname;
-    option.textContent = agent.hostname;
+    option.textContent = agent.connected ? agent.hostname : `${agent.hostname} (offline)`;
     agentSelect.appendChild(option);
 
     const card = document.createElement("div");
-    card.className = "agent-card";
+    card.className = agent.pingUnresponsive ? "agent-card timeout-alert" : "agent-card";
 
-    const latencyText = formatLatency(agent.latencyMs);
-    const latencyClass = getLatencyClass(agent.latencyMs);
+    const latencyText = formatAgentLatency(agent);
+    const latencyClass = getAgentLatencyClass(agent);
     const latencyCellClass =
       latencyClass === "muted"
         ? "agent-cell muted"
         : `agent-cell ${latencyClass}`;
-    const gtaClass = agent.gtaRunning ? "gta-yes" : "gta-no";
+    const latencyStateClass = agent.pingUnresponsive ? " timeout-pulse" : "";
+    const gtaValue = formatGtaRunning(agent);
+    const gtaClass = !agent.connected || agent.pingUnresponsive
+      ? "agent-cell muted"
+      : agent.gtaRunning
+        ? "agent-cell gta-yes"
+        : "agent-cell gta-no";
     card.innerHTML = `
       <div class="agent-cell" data-label="Hostname">${agent.hostname}</div>
-      <div class="agent-cell muted" data-label="Last seen">${new Date(agent.lastSeen).toLocaleTimeString()}</div>
-      <div class="${latencyCellClass}" data-label="Latency to server">${latencyText}</div>
-      <div class="agent-cell ${gtaClass}" data-label="GTA running">${agent.gtaRunning ? "Yes" : "No"}</div>
+      <div class="agent-cell muted" data-label="Last seen">${new Date(agent.lastSeen).toLocaleTimeString()}${agent.connected ? "" : " (offline)"}</div>
+      <div class="${latencyCellClass}${latencyStateClass}" data-label="Latency to server">${latencyText}</div>
+      <div class="${gtaClass}" data-label="GTA running">${gtaValue}</div>
     `;
     agentList.appendChild(card);
   });
