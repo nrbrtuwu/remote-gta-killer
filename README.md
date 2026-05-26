@@ -28,9 +28,9 @@ Edit server/.env and set a strong SHARED_TOKEN.
 
 Server timing values are configured in server/.env and are pushed to agents automatically on connect:
 
-- PING_HEARTBEAT_INTERVAL_MS=how often the server pings agents
-- TIMEOUT_TO_OFFLINE_INTERVAL_MS=how long a timeout stays in Timeout before Offline
-- OFFLINE_DEVICE_DELETE_INTERVAL_MS=how long an offline device stays listed before deletion
+- PING_HEARTBEAT_INTERVAL_MS = how often the server checks each agent heartbeat
+- TIMEOUT_TO_OFFLINE_INTERVAL_MS = how long a Timeout device stays in Timeout before Offline
+- OFFLINE_DEVICE_DELETE_INTERVAL_MS = how long an Offline device stays listed before deletion
 
 Edit server/config.json to control access rules:
 
@@ -59,7 +59,7 @@ Edit agent/.env:
 - SHARED_TOKEN=the same value as the server
 - HOSTNAME=optional override (defaults to Windows hostname)
 
-Agent timing values are not configured locally; the server sends them on connect.
+Agent timing values are not configured locally; the server sends the central timing settings on connect.
 
 Start the agent:
 

@@ -12,16 +12,14 @@ function readPositiveIntEnv(name, fallback) {
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
-const SERVER_TIMINGS = {
+const SERVER_SETTINGS = {
   pingHeartbeatIntervalMs: readPositiveIntEnv("PING_HEARTBEAT_INTERVAL_MS", 500),
   timeoutToOfflineIntervalMs: readPositiveIntEnv("TIMEOUT_TO_OFFLINE_INTERVAL_MS", 300000),
-  offlineDeviceDeleteIntervalMs: readPositiveIntEnv("OFFLINE_DEVICE_DELETE_INTERVAL_MS", 900000),
-  socketIoPingIntervalMs: readPositiveIntEnv("SOCKETIO_PING_INTERVAL_MS", 25000),
-  socketIoPingTimeoutMs: readPositiveIntEnv("SOCKETIO_PING_TIMEOUT_MS", 300000),
-  agentStatusReportIntervalMs: readPositiveIntEnv("AGENT_STATUS_REPORT_INTERVAL_MS", 5000),
-  killCommandTimeoutMs: readPositiveIntEnv("KILL_COMMAND_TIMEOUT_MS", 10000),
-  shutdownAckTimeoutMs: readPositiveIntEnv("SHUTDOWN_ACK_TIMEOUT_MS", 500)
+  offlineDeviceDeleteIntervalMs: readPositiveIntEnv("OFFLINE_DEVICE_DELETE_INTERVAL_MS", 900000)
 };
+
+const SOCKETIO_PING_INTERVAL_MS = SERVER_SETTINGS.pingHeartbeatIntervalMs;
+const SOCKETIO_PING_TIMEOUT_MS = Math.max(SERVER_SETTINGS.pingHeartbeatIntervalMs * 2, 1000);
 
 if (!SHARED_TOKEN) {
   console.error("Missing SHARED_TOKEN in environment.");
@@ -37,8 +35,8 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   transports: ["websocket"],
-  pingInterval: SERVER_TIMINGS.socketIoPingIntervalMs,
-  pingTimeout: SERVER_TIMINGS.socketIoPingTimeoutMs,
+  pingInterval: SOCKETIO_PING_INTERVAL_MS,
+  pingTimeout: SOCKETIO_PING_TIMEOUT_MS,
   cors: {
     origin: false
   }
@@ -85,31 +83,26 @@ function emitAgents() {
 
 function getAgentSettings() {
   return {
-    pingHeartbeatIntervalMs: SERVER_TIMINGS.pingHeartbeatIntervalMs,
-    timeoutToOfflineIntervalMs: SERVER_TIMINGS.timeoutToOfflineIntervalMs,
-    offlineDeviceDeleteIntervalMs: SERVER_TIMINGS.offlineDeviceDeleteIntervalMs,
-    socketIoPingIntervalMs: SERVER_TIMINGS.socketIoPingIntervalMs,
-    socketIoPingTimeoutMs: SERVER_TIMINGS.socketIoPingTimeoutMs,
-    agentStatusReportIntervalMs: SERVER_TIMINGS.agentStatusReportIntervalMs,
-    killCommandTimeoutMs: SERVER_TIMINGS.killCommandTimeoutMs,
-    shutdownAckTimeoutMs: SERVER_TIMINGS.shutdownAckTimeoutMs
+    pingHeartbeatIntervalMs: SERVER_SETTINGS.pingHeartbeatIntervalMs,
+    timeoutToOfflineIntervalMs: SERVER_SETTINGS.timeoutToOfflineIntervalMs,
+    offlineDeviceDeleteIntervalMs: SERVER_SETTINGS.offlineDeviceDeleteIntervalMs
   };
 }
 
 function getAgentPingIntervalMs() {
-  return SERVER_TIMINGS.pingHeartbeatIntervalMs;
+  return SERVER_SETTINGS.pingHeartbeatIntervalMs;
 }
 
 function getAgentPingTimeoutMs() {
-  return SERVER_TIMINGS.socketIoPingTimeoutMs;
+  return SOCKETIO_PING_TIMEOUT_MS;
 }
 
 function getAgentPingOfflineGraceMs() {
-  return SERVER_TIMINGS.timeoutToOfflineIntervalMs;
+  return SERVER_SETTINGS.timeoutToOfflineIntervalMs;
 }
 
 function getAgentOfflineGraceMs() {
-  return SERVER_TIMINGS.offlineDeviceDeleteIntervalMs;
+  return SERVER_SETTINGS.offlineDeviceDeleteIntervalMs;
 }
 
 function clearPingLossTimer(agent) {

@@ -12,16 +12,11 @@ const HOSTNAME = process.env.HOSTNAME || os.hostname();
 const KILL_COMMAND = process.env.KILL_COMMAND || "taskkill /im GTA5_Enhanced.exe /f";
 const CHECK_COMMAND =
   process.env.CHECK_COMMAND || 'tasklist /fi "imagename eq GTA5_Enhanced.exe"';
-const DEFAULT_SETTINGS = {
-  pingHeartbeatIntervalMs: 500,
-  timeoutToOfflineIntervalMs: 300000,
-  offlineDeviceDeleteIntervalMs: 900000,
-  socketIoPingIntervalMs: 25000,
-  socketIoPingTimeoutMs: 300000,
-  agentStatusReportIntervalMs: 5000,
-  killCommandTimeoutMs: 10000,
-  shutdownAckTimeoutMs: 500
-};
+const DEFAULT_PING_HEARTBEAT_INTERVAL_MS = 500;
+const DEFAULT_TIMEOUT_TO_OFFLINE_INTERVAL_MS = 300000;
+const DEFAULT_OFFLINE_DEVICE_DELETE_INTERVAL_MS = 900000;
+const SHUTDOWN_ACK_TIMEOUT_MS = 500;
+const KILL_COMMAND_TIMEOUT_MS = 10000;
 
 if (!SHARED_TOKEN) {
   console.error("Missing SHARED_TOKEN in environment.");
@@ -39,7 +34,11 @@ const socket = io(SERVER_URL, {
 });
 
 let shuttingDown = false;
-let serverSettings = { ...DEFAULT_SETTINGS };
+let serverSettings = {
+  pingHeartbeatIntervalMs: DEFAULT_PING_HEARTBEAT_INTERVAL_MS,
+  timeoutToOfflineIntervalMs: DEFAULT_TIMEOUT_TO_OFFLINE_INTERVAL_MS,
+  offlineDeviceDeleteIntervalMs: DEFAULT_OFFLINE_DEVICE_DELETE_INTERVAL_MS
+};
 let statusTimer = null;
 
 function readPositiveInt(value, fallback) {
@@ -51,19 +50,14 @@ function setupStatusReporting() {
     clearInterval(statusTimer);
   }
 
-  statusTimer = setInterval(reportStatus, readPositiveInt(serverSettings.agentStatusReportIntervalMs, DEFAULT_SETTINGS.agentStatusReportIntervalMs));
+  statusTimer = setInterval(reportStatus, readPositiveInt(serverSettings.pingHeartbeatIntervalMs, DEFAULT_PING_HEARTBEAT_INTERVAL_MS));
 }
 
 function applyServerSettings(nextSettings = {}) {
   serverSettings = {
-    pingHeartbeatIntervalMs: readPositiveInt(nextSettings.pingHeartbeatIntervalMs, DEFAULT_SETTINGS.pingHeartbeatIntervalMs),
-    timeoutToOfflineIntervalMs: readPositiveInt(nextSettings.timeoutToOfflineIntervalMs, DEFAULT_SETTINGS.timeoutToOfflineIntervalMs),
-    offlineDeviceDeleteIntervalMs: readPositiveInt(nextSettings.offlineDeviceDeleteIntervalMs, DEFAULT_SETTINGS.offlineDeviceDeleteIntervalMs),
-    socketIoPingIntervalMs: readPositiveInt(nextSettings.socketIoPingIntervalMs, DEFAULT_SETTINGS.socketIoPingIntervalMs),
-    socketIoPingTimeoutMs: readPositiveInt(nextSettings.socketIoPingTimeoutMs, DEFAULT_SETTINGS.socketIoPingTimeoutMs),
-    agentStatusReportIntervalMs: readPositiveInt(nextSettings.agentStatusReportIntervalMs, DEFAULT_SETTINGS.agentStatusReportIntervalMs),
-    killCommandTimeoutMs: readPositiveInt(nextSettings.killCommandTimeoutMs, DEFAULT_SETTINGS.killCommandTimeoutMs),
-    shutdownAckTimeoutMs: readPositiveInt(nextSettings.shutdownAckTimeoutMs, DEFAULT_SETTINGS.shutdownAckTimeoutMs)
+    pingHeartbeatIntervalMs: readPositiveInt(nextSettings.pingHeartbeatIntervalMs, DEFAULT_PING_HEARTBEAT_INTERVAL_MS),
+    timeoutToOfflineIntervalMs: readPositiveInt(nextSettings.timeoutToOfflineIntervalMs, DEFAULT_TIMEOUT_TO_OFFLINE_INTERVAL_MS),
+    offlineDeviceDeleteIntervalMs: readPositiveInt(nextSettings.offlineDeviceDeleteIntervalMs, DEFAULT_OFFLINE_DEVICE_DELETE_INTERVAL_MS)
   };
 
   setupStatusReporting();
@@ -86,7 +80,7 @@ function gracefulShutdown(reason = "shutdown") {
   }
 
   socket.emit("agent:shutdown", { reason });
-  setTimeout(finish, readPositiveInt(serverSettings.shutdownAckTimeoutMs, DEFAULT_SETTINGS.shutdownAckTimeoutMs));
+  setTimeout(finish, SHUTDOWN_ACK_TIMEOUT_MS);
 }
 
 async function isGtaRunning() {
@@ -138,7 +132,7 @@ socket.on("kill", async ({ requestId } = {}) => {
   try {
     const { stdout, stderr } = await execAsync(KILL_COMMAND, {
       windowsHide: true,
-      timeout: readPositiveInt(serverSettings.killCommandTimeoutMs, DEFAULT_SETTINGS.killCommandTimeoutMs)
+      timeout: KILL_COMMAND_TIMEOUT_MS
     });
     const durationMs = Date.now() - start;
     const message = (stdout || stderr || "Killed").trim();
