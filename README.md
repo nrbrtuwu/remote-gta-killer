@@ -34,8 +34,8 @@ Server timing values are configured in server/.env and are pushed to agents auto
 
 Edit server/config.json to control access rules:
 
-- tailscaleEnabled: false means only local network dashboard IPs can connect and send kill commands.
-- tailscaleEnabled: true means only IPs in allowedTailscaleIps can connect and send kill commands.
+- vpnOnly: false means only local network dashboard IPs can connect and send kill commands.
+- vpnOnly: true means only IPs in allowedTailscaleIps can connect and send kill commands.
 
 Run the server:
 
@@ -69,8 +69,8 @@ npm start
 
 ## Network access notes
 
-- If tailscaleEnabled is false, only local network dashboards can control kills.
-- If tailscaleEnabled is true, add your tailnet dashboard IPs to allowedTailscaleIps.
+- If vpnOnly is false, only local network dashboards can control kills.
+- If vpnOnly is true, add your tailnet dashboard IPs to allowedTailscaleIps.
 - Do NOT expose the server publicly.
 
 ## Features

@@ -261,7 +261,7 @@ function getSocketIp(socket) {
 
 function isDashboardIpAllowed(socket) {
   const ip = getSocketIp(socket);
-  if (!accessConfig.tailscaleEnabled) {
+  if (!accessConfig.vpnOnly) {
     return isLocalIp(ip);
   }
   const allowed = accessConfig.allowedTailscaleIps || [];

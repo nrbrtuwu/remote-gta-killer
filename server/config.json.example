@@ -1,0 +1,4 @@
+{
+  "vpnOnly": false,
+  "allowedTailscaleIps": ["ip1", "ip2"]
+}
